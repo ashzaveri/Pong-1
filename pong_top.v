@@ -46,7 +46,7 @@ module pong (ClkPort, vga_h_sync, vga_v_sync, vga_r, vga_g, vga_b, Sw0, Sw1, btn
 	///////////////		VGA control starts here		/////////////////
 	/////////////////////////////////////////////////////////////////
 	reg [9:0] pad_position;
-	reg [2:0] p;
+	reg [9:0] ball_position;
 	reg flag1;
 	
 	always @(posedge DIV_CLK[21])
@@ -61,28 +61,35 @@ module pong (ClkPort, vga_h_sync, vga_v_sync, vga_r, vga_g, vga_b, Sw0, Sw1, btn
 				pad_position<=pad_position-10;
 		end
 	
-	always @(posedge DIV_CLK[27])
-		begin
-		if (reset)
-			flag1 <= 0;
-		if (!flag1)
+		always @(posedge DIV_CLK[21])
 			begin
-			p[0] <= CounterY>=(pad_position-50) && CounterY<=(pad_position+50) && CounterX>=20 && CounterX<=
-			p[1] <= 0;
-			p[2] <= 0;
-			flag1 <= 1;
+			if(reset)
+				begin
+				ball_position<=200;
+				flag1 <= 1;
+				end
+			else
+				begin
+				if (flag1)
+					begin
+					if(ball_position >= 600)
+						flag1 <= 0;
+					else
+						ball_position <= ball_position + 10;
+					end
+				else
+					begin
+					if(ball_position <= 50 && pad_position <= 450 && pad_position >= 360)
+						flag1 <= 1;
+					else
+						ball_position <= ball_position - 10;
+					end
+				end
 			end
-		else
-			begin
-			p[0] <= p[2];
-			p[1] <= p[0];
-			p[2] <= p[1];
-			end
-		end
 
-	wire R = p[0];
-	wire G = p[1];
-	wire B = p[2];
+	wire R = CounterY>=(pad_position-50) && CounterY<=(pad_position+50) && CounterX>=20 && CounterX<=30;
+	wire G = CounterY>=400 && CounterY<=410 && CounterX>=(ball_position-5) && CounterX<=(ball_position+5);
+	wire B = 0;
 	
 	always @(posedge clk)
 	begin

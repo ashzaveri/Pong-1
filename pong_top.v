@@ -2,20 +2,19 @@
 //////////////////////////////////////////////////////////////////////////////////
 // Pong Video Game
 // Authors:  Mikey Takla, Ash Zaveri, Jay Gutierrez
+// Adapted from VGA verilog template by Da Cheng
 //////////////////////////////////////////////////////////////////////////////////
-module pong (ClkPort, vga_h_sync, vga_v_sync, vga_r, vga_g, vga_b, Sw0, Sw1, btnU, btnD,
+module pong (ClkPort, vga_h_sync, vga_v_sync, vga_r, vga_g, vga_b, Sw0, Sw1, btnU, btnD, btnL, btnR,
 	St_ce_bar, St_rp_bar, Mt_ce_bar, Mt_St_oe_bar, Mt_St_we_bar,
 	An0, An1, An2, An3, Ca, Cb, Cc, Cd, Ce, Cf, Cg, Dp,
 	LD0, LD1, LD2, LD3, LD4, LD5, LD6, LD7);
-	input ClkPort, Sw0, btnU, btnD, Sw0, Sw1;
+	input ClkPort, Sw0, btnU, btnD, btnL, btnR, Sw0, Sw1;
 	output St_ce_bar, St_rp_bar, Mt_ce_bar, Mt_St_oe_bar, Mt_St_we_bar;
 	output vga_h_sync, vga_v_sync, vga_r, vga_g, vga_b;
 	output An0, An1, An2, An3, Ca, Cb, Cc, Cd, Ce, Cf, Cg, Dp;
 	output LD0, LD1, LD2, LD3, LD4, LD5, LD6, LD7;
 	reg vga_r, vga_g, vga_b;
-	
 	//////////////////////////////////////////////////////////////////////////////////////////
-	
 	/*  LOCAL SIGNALS */
 	wire	reset, start, ClkPort, board_clk, clk, button_clk;
 	
@@ -32,64 +31,75 @@ module pong (ClkPort, vga_h_sync, vga_v_sync, vga_r, vga_g, vga_b, Sw0, Sw1, btn
 			DIV_CLK <= DIV_CLK + 1'b1;
 	end	
 
-	assign	button_clk = DIV_CLK[18];
 	assign	clk = DIV_CLK[1];
 	assign 	{St_ce_bar, St_rp_bar, Mt_ce_bar, Mt_St_oe_bar, Mt_St_we_bar} = {5'b11111};
 	
 	wire inDisplayArea;
 	wire [9:0] CounterX;
 	wire [9:0] CounterY;
+	wire b_display;
+	
+	reg [9:0] pad1_position;
+	reg [9:0] pad2_position;
+	wire [3:0] player1_score;
+	wire [3:0] player2_score;
 
-	hvsync_generator hvsync_gen(.clk(clk), .reset(reset),.vga_h_sync(vga_h_sync), .vga_v_sync(vga_v_sync), .inDisplayArea(inDisplayArea), .CounterX(CounterX), .CounterY(CounterY));
+	ball_sm ball(.clk(clk), .reset(reset), .sys_clk(DIV_CLK[21]), .p1_position(pad1_position), .p2_position(pad2_position), .vga_h_sync(vga_h_sync), .vga_v_sync(vga_v_sync), .inDisplayArea(inDisplayArea), .CounterX(CounterX), .CounterY(CounterY), .b_display(b_display), .p1_score(player1_score), .p2_score(player2_score));
 	
 	/////////////////////////////////////////////////////////////////
 	///////////////		VGA control starts here		/////////////////
 	/////////////////////////////////////////////////////////////////
-	reg [9:0] pad_position;
-	reg [9:0] ball_position;
-	reg flag1;
-	
+
+	//PAD 1
 	always @(posedge DIV_CLK[21])
 		begin
 			if(reset)
 				begin
-				pad_position<=400;
+				pad1_position<=400;
 				end
-			else if(btnD && ~btnU)
-				pad_position<=pad_position+10;
-			else if(btnU && ~btnD)
-				pad_position<=pad_position-10;
+			else if(btnL && ~btnU)
+				begin
+				if (pad1_position >= 430)
+					pad1_position <= 430;
+				else
+					pad1_position <= pad1_position+10;
+				end
+			else if(btnU && ~btnL)
+				begin
+				if (pad1_position <= 50)
+					pad1_position <= 50;
+				else
+					pad1_position <= pad1_position-10;
+				end
+		
 		end
-	
+		
+		//PAD 2
 		always @(posedge DIV_CLK[21])
-			begin
+		begin
 			if(reset)
 				begin
-				ball_position<=200;
-				flag1 <= 1;
+				pad2_position<=200;
 				end
-			else
+			else if(btnD && ~btnR)
 				begin
-				if (flag1)
-					begin
-					if(ball_position >= 600)
-						flag1 <= 0;
-					else
-						ball_position <= ball_position + 10;
-					end
+				if (pad2_position >= 430)
+					pad2_position <= 430;
 				else
-					begin
-					if(ball_position <= 50 && pad_position <= 450 && pad_position >= 360)
-						flag1 <= 1;
-					else
-						ball_position <= ball_position - 10;
-					end
+					pad2_position <= pad2_position+10;
 				end
-			end
+			else if(btnR && ~btnD)
+				begin
+				if (pad2_position <= 50)
+					pad2_position <= 50;
+				else
+					pad2_position <= pad2_position-10;
+				end
+		end
 
-	wire R = CounterY>=(pad_position-50) && CounterY<=(pad_position+50) && CounterX>=20 && CounterX<=30;
-	wire G = CounterY>=400 && CounterY<=410 && CounterX>=(ball_position-5) && CounterX<=(ball_position+5);
-	wire B = 0;
+	wire R = (CounterY>=(pad1_position-50) && CounterY<=(pad1_position+50) && CounterX>=20 && CounterX<=30);
+	wire G = b_display;
+	wire B = CounterY>=(pad2_position-50) && CounterY<=(pad2_position+50) && CounterX>=610 && CounterX<=620;
 	
 	always @(posedge clk)
 	begin
@@ -122,7 +132,7 @@ module pong (ClkPort, vga_h_sync, vga_v_sync, vga_r, vga_g, vga_b, Sw0, Sw1, btn
 	assign LD4 = reset;
 	
 	assign LD3 = (state == `QI);
-	assign LD5 = (state == `QGAME_1);	
+	assign LD5 = (state == `QGAME_1);
 	assign LD6 = (state == `QGAME_2);
 	assign LD7 = (state == `QDONE);
 	
@@ -137,10 +147,10 @@ module pong (ClkPort, vga_h_sync, vga_v_sync, vga_r, vga_g, vga_b, Sw0, Sw1, btn
 	wire 	[3:0]	SSD0, SSD1, SSD2, SSD3;
 	wire 	[1:0] ssdscan_clk;
 	
-	assign SSD3 = 4'b1111;
+	assign SSD3 = player1_score[3:0];
 	assign SSD2 = 4'b1111;
 	assign SSD1 = 4'b1111;
-	assign SSD0 = pad_position[3:0];
+	assign SSD0 = player2_score[3:0];
 	
 	// need a scan clk for the seven segment display 
 	// 191Hz (50MHz / 2^18) works well
